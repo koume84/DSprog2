@@ -67,10 +67,6 @@ class CalculatorApp(ft.Container):
                 ),
                 ft.Row(
                     controls=[
-                        ExponentButton(text="x²", button_clicked=self.button_clicked),
-                        ExponentButton(text="x³", button_clicked=self.button_clicked),
-                        ExponentButton(text="xʸ", button_clicked=self.button_clicked),
-                        ExponentButton(text="eˣ", button_clicked=self.button_clicked),
                         DigitButton(text="7", button_clicked=self.button_clicked),
                         DigitButton(text="8", button_clicked=self.button_clicked),
                         DigitButton(text="9", button_clicked=self.button_clicked),
@@ -95,14 +91,26 @@ class CalculatorApp(ft.Container):
                 ),
                 ft.Row(
                     controls=[
-                        TrigButton(text="sin", button_clicked=self.button_clicked),
-                        TrigButton(text="cos", button_clicked=self.button_clicked),
-                        TrigButton(text="tan", button_clicked=self.button_clicked),
                         DigitButton(
                             text="0", expand=2, button_clicked=self.button_clicked
                         ),
                         DigitButton(text=".", button_clicked=self.button_clicked),
                         ActionButton(text="=", button_clicked=self.button_clicked),
+                    ]
+                ),
+                ft.Row(
+                    controls=[
+                        TrigButton(text="sin", button_clicked=self.button_clicked),
+                        TrigButton(text="cos", button_clicked=self.button_clicked),
+                        TrigButton(text="tan", button_clicked=self.button_clicked),
+                    ]
+                ),
+                ft.Row(
+                    controls=[
+                        ExponentButton(text="x²", button_clicked=self.button_clicked),
+                        ExponentButton(text="x³", button_clicked=self.button_clicked),
+                        ExponentButton(text="xʸ", button_clicked=self.button_clicked),
+                        ExponentButton(text="eˣ", button_clicked=self.button_clicked),
                     ]
                 ),
                 
