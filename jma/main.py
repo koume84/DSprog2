@@ -1,7 +1,8 @@
 import asyncio
 import requests
 import flet as ft
-from flet import Dropdown, dropdown, ElevatedButton, Column
+from flet import Dropdown, dropdown, ElevatedButton, Column, ListView, Text
+from datetime import datetime
 
 # グローバルイベントループの設定
 loop = asyncio.new_event_loop()
@@ -21,21 +22,29 @@ async def get_weather_forecast(region_code):
     response.raise_for_status()
     return response.json()
 
-# 地域ごとの天気情報をロードする非同期関数
-async def load_forecast(region_code):
-    try:
-        weather_data = await get_weather_forecast(region_code)
-        print(f"地域コード {region_code} の天気情報: {weather_data[0]['timeSeries'][0]['areas']}")
-        return weather_data
-    except requests.exceptions.HTTPError as ex:
-        print(f"HTTPエラーが発生しました: {ex}")
-        return None
+# 日付フォーマットを変換する関数
+def format_date(date_str):
+    date = datetime.fromisoformat(date_str)
+    return date.strftime("%m月%d日")
 
 # 特定のエリアの天気情報を表示
-def show_area_weather(e, area_data):
+def show_area_weather(e, area_data, temperature_data):
     if area_data:
         weathers = area_data.get("weathers", [])
-        weather_text.value = "\n\n".join(weathers) if weathers else "天気情報が取得できませんでした。"
+        timeDefines = area_data.get("timeDefines", [])
+        max_temps = temperature_data.get("tempsMax", []) if temperature_data else []
+        min_temps = temperature_data.get("tempsMin", []) if temperature_data else []
+        if weathers and timeDefines:
+            weather_messages = []
+            for i, (date, weather) in enumerate(zip(timeDefines[:3], weathers[:3])):
+                formatted_date = format_date(date)
+                weather = weather.replace('　', '')  # 全角スペースを削除する
+                max_temp = f"{max_temps[i]}℃" if i < len(max_temps) and max_temps[i] else "-℃"
+                min_temp = f"{min_temps[i]}℃" if i < len(min_temps) and min_temps[i] else "-℃"
+                weather_messages.append(f"{formatted_date} の天気: {weather}\n最高気温: {max_temp}, 最低気温: {min_temp}")
+            weather_text.value = "\n\n".join(weather_messages)
+        else:
+            weather_text.value = "天気情報が取得できませんでした。"
     else:
         weather_text.value = "天気情報が取得できませんでした。"
     page.update()
@@ -54,8 +63,10 @@ async def on_dropdown_change_async(selected_region_name):
                     # 都道府県名を追加
                     area_full_name = f"{area_names.get(region_code, '未知の地域')} - {area_name}"
                     print(f"ボタンが追加される予定の地域: {area_full_name}")
-                    area_button = ElevatedButton(text=area_full_name, on_click=lambda e, area=area: show_area_weather(e, area))
+                    area_button = ElevatedButton(text=area_full_name, on_click=lambda e, area=area, temp_data=weather_data[1]['timeSeries'][1] if len(weather_data[1]['timeSeries']) > 1 else None: show_area_weather(e, area, temp_data))
                     area_buttons.controls.append(area_button)
+                # 時間定義を保存しておく
+                area["timeDefines"] = weather_data[0]['timeSeries'][0]['timeDefines']
 
     page.update()
 
@@ -63,6 +74,16 @@ async def on_dropdown_change_async(selected_region_name):
 def on_dropdown_change(e):
     selected_region_name = e.control.value
     asyncio.run_coroutine_threadsafe(on_dropdown_change_async(selected_region_name), loop)
+
+# 地域ごとの天気情報をロードする非同期関数
+async def load_forecast(region_code):
+    try:
+        weather_data = await get_weather_forecast(region_code)
+        print(f"地域コード {region_code} の天気情報: {weather_data[0]['timeSeries'][0]['areas']}")
+        return weather_data
+    except requests.exceptions.HTTPError as ex:
+        print(f"HTTPエラーが発生しました: {ex}")
+        return None
 
 # メイン関数
 def main(pg):
@@ -93,10 +114,18 @@ def main(pg):
 
     dropdown_list = Dropdown(options=dropdown_items, on_change=on_dropdown_change, width=400)
     area_buttons = Column()
-    weather_text = ft.Text(value="天気予報がここに表示されます", expand=True)
+    weather_text = Text(value="天気予報がここに表示されます", expand=True)
+
+    # スクロール可能なListViewにラップ
+    scrollable_area = ListView(
+        controls=[area_buttons],
+        expand=True,
+        height=400,
+        width=400
+    )
 
     page.add(dropdown_list)
-    page.add(area_buttons)
+    page.add(scrollable_area)
     page.add(weather_text)
     page.update()
 
