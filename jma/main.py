@@ -27,6 +27,27 @@ def format_date(date_str):
     date = datetime.fromisoformat(date_str)
     return date.strftime("%m月%d日")
 
+# データベースに天気データを保存する関数
+def save_weather_to_db(location, datetime, weather, temperature_max, temperature_min, humidity, wind_speed):
+    # データベースに再接続
+    con = sqlite3.connect(path + db_name)
+    cur = con.cursor()
+
+    # データを挿入するSQL
+    sql_insert = """
+    INSERT INTO weather_reports (location, datetime, weather, temperature_max, temperature_min, humidity, wind_speed)
+    VALUES (?, ?, ?, ?, ?, ?, ?);
+    """
+
+    # データ挿入
+    cur.execute(sql_insert, (location, datetime, weather, temperature_max, temperature_min, humidity, wind_speed))
+
+    # コミット処理（データ操作を反映させる）
+    con.commit()
+
+    # DBへの接続を閉じる
+    con.close()
+
 # 特定のエリアの天気情報を表示
 def show_area_weather(e, area_data, temperature_data):
     if area_data:
