@@ -3,6 +3,7 @@ import requests
 import flet as ft
 from flet import Dropdown, dropdown, ElevatedButton, Column, ListView, Text
 from datetime import datetime
+import sqlite3
 
 # グローバルイベントループの設定
 loop = asyncio.new_event_loop()
