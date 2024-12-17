@@ -1,4 +1,3 @@
-
 import asyncio
 import requests
 import flet as ft
