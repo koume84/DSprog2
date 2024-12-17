@@ -163,7 +163,7 @@ import asyncio
 import requests
 import flet as ft
 import sqlite3
-from flet import Dropdown, dropdown, ElevatedButton, Column, ListView, Text
+from flet import Dropdown, dropdown, ElevatedButton, Column, ListView, Image, Text, Container, Row, ScrollMode, MainAxisAlignment
 from datetime import datetime
 
 # グローバルイベントループの設定
@@ -173,6 +173,20 @@ asyncio.set_event_loop(loop)
 # データベースのパスと名前
 db_name = 'weather.db'
 db_path = './'
+
+# 天気コードからアイコンURLを取得する関数
+def get_weather_icon(weather_code):
+    weather_category = int(weather_code) // 100  # 百の位を取得
+    if weather_category == 1:
+        return "https://illalet.com/wp-content/uploads/2017/05/16_2_19.png"  # 晴れ
+    elif weather_category == 2:
+        return "https://illalet.com/wp-content/uploads/2017/05/16_2_21.png"  # 曇り
+    elif weather_category == 3:
+        return "https://illalet.com/wp-content/uploads/2017/05/16_2_23.png"  # 雨
+    elif weather_category == 4:
+        return "https://illalet.com/wp-content/uploads/illust/16_2_925.png"  # 雪
+    else:
+        return "unknown.png"  # 不明な場合
 
 # SQLiteデータベースのセットアップとテーブル作成
 def setup_database():
@@ -184,11 +198,7 @@ def setup_database():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         location TEXT NOT NULL,
         datetime TEXT NOT NULL,
-        weather TEXT,
-        temperature_max REAL,
-        temperature_min REAL,
-        humidity REAL,
-        wind_speed REAL
+        weather TEXT
     )
     ''')
 
@@ -220,52 +230,69 @@ async def get_weather_forecast(region_code):
     response.raise_for_status()
     return response.json()
 
-# 天気データをデータベースに保存する関数
-def save_weather_to_db(location, datetime, weather, temperature_max, temperature_min, humidity, wind_speed):
-    conn = sqlite3.connect(db_path + db_name)
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-    INSERT INTO weather_reports (location, datetime, weather, temperature_max, temperature_min, humidity, wind_speed)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (location, datetime, weather, temperature_max, temperature_min, humidity, wind_speed))
-    
-    conn.commit()
-    conn.close()
+# 天気データを保存する関数
+def save_weather_to_db(location, datetime, weather):
+    try:
+        conn = sqlite3.connect(db_path + db_name)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+        INSERT INTO weather_reports (location, datetime, weather)
+        VALUES (?, ?, ?)
+        ''', (location, datetime, weather))
+        
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error saving to database: {e}")
 
 # 日付フォーマットを変換する関数
 def format_date(date_str):
-    date = datetime.fromisoformat(date_str)
-    return date.strftime("%m月%d日")
+    try:
+        date = datetime.fromisoformat(date_str)
+        return date.strftime("%Y-%m-%d")
+    except Exception as e:
+        print(f"Error formatting date: {e}")
+        return date_str
 
 # 特定のエリアの天気情報を表示
-def show_area_weather(location, area_data, temperature_data):
-    if area_data:
-        weathers = area_data.get("weathers", [])
-        timeDefines = area_data.get("timeDefines", [])
-        max_temps = temperature_data.get("tempsMax", []) if temperature_data else []
-        min_temps = temperature_data.get("tempsMin", []) if temperature_data else []
-        if weathers and timeDefines:
-            weather_messages = []
-            for i, (date, weather) in enumerate(zip(timeDefines[:3], weathers[:3])):
-                formatted_date = format_date(date)
-                weather = weather.replace('　', '')  # 全角スペースを削除する
-                max_temp = f"{max_temps[i]}℃" if i < len(max_temps) and max_temps[i] else "-℃"
-                min_temp = f"{min_temps[i]}℃" if i < len(min_temps) and min_temps[i] else "-℃"
-                weather_messages.append(f"{formatted_date} の天気: {weather}\n最高気温: {max_temp}, 最低気温: {min_temp}")
-                # 天気データをデータベースに保存
-                save_weather_to_db(location, formatted_date, weather, max_temps[i] if max_temps else None, min_temps[i] if min_temps else None, None, None)
-            weather_text.value = "\n\n".join(weather_messages)
-        else:
-            weather_text.value = "天気情報が取得できませんでした。"
-    else:
-        weather_text.value = "天気情報が取得できませんでした。"
-    page.update()
+def show_area_weather(location, area_data):
+    try:
+        if area_data:
+            weathers = area_data.get("weathers", [])
+            weatherCodes = area_data.get("weatherCodes", [])  # weatherCodesを取得
+            timeDefines = area_data.get("timeDefines", [])
 
-# データベース内容を表示するUI用関数
-def display_database_contents():
-    rows = fetch_weather_reports()
-    db_text.value = "\n".join([str(row) for row in rows])
+            if weathers and timeDefines and weatherCodes:
+                rows = []
+                for i, (date, weather, weather_code) in enumerate(zip(timeDefines[:3], weathers[:3], weatherCodes[:3])):
+                    formatted_date = format_date(date)
+                    weather = weather.replace('　', '')  # 全角スペースを削除する
+                    weather_icon = get_weather_icon(weather_code)  # 天気アイコンの取得
+                    weather_messages = f"{formatted_date} の天気: {weather}"
+                    # 天気データをデータベースに保存
+                    save_weather_to_db(location, formatted_date, weather)
+                    
+                    # 一日の天気情報を表示するコンテナ
+                    weather_container = Container(
+                        content=Column([
+                            Text(formatted_date, size=16),
+                            Image(src=weather_icon, width=48, height=48),
+                            Text(weather, size=14)
+                        ]),
+                        width=150,
+                        padding=10
+                    )
+                    
+                    rows.append(weather_container)
+                
+                weather_text.controls = rows
+            else:
+                weather_text.controls = [Text("天気情報が取得できませんでした。")]
+        else:
+            weather_text.controls = [Text("天気情報が取得できませんでした。")]
+    except Exception as e:
+        weather_text.controls = [Text(f"Error displaying weather: {e}")]
     page.update()
 
 # 地域選択後の処理（非同期関数）
@@ -281,11 +308,11 @@ async def on_dropdown_change_async(selected_region_name):
                     area_name = area['area']['name']
                     # 都道府県名を追加
                     area_full_name = f"{area_names.get(region_code, '未知の地域')} - {area_name}"
-                    print(f"ボタンが追加される予定の地域: {area_full_name}")
                     location = area_full_name  # 位置情報を設定
                     area_button = ElevatedButton(
                         text=area_full_name, 
-                        on_click=lambda e, area=area, location=location, temp_data=weather_data[1]['timeSeries'][1] if len(weather_data[1]['timeSeries']) > 1 else None: show_area_weather(location, area, temp_data)
+                        on_click=lambda e, area=area, location=location: show_area_weather(location, area),
+                        width=400
                     )
                     area_buttons.controls.append(area_button)
                 # 時間定義を保存しておく
@@ -302,7 +329,6 @@ def on_dropdown_change(e):
 async def load_forecast(region_code):
     try:
         weather_data = await get_weather_forecast(region_code)
-        print(f"地域コード {region_code} の天気情報: {weather_data[0]['timeSeries'][0]['areas']}")
         return weather_data
     except requests.exceptions.HTTPError as ex:
         print(f"HTTPエラーが発生しました: {ex}")
@@ -310,7 +336,7 @@ async def load_forecast(region_code):
 
 # メイン関数
 def main(pg):
-    global area_buttons, weather_text, regions, page, area_names, db_text
+    global area_buttons, weather_text, regions, page, area_names
     page = pg
     page.title = "天気予報アプリケーション - 地域ごとの天気"
 
@@ -339,30 +365,70 @@ def main(pg):
     dropdown_items = [dropdown.Option(region) for region in regions.keys()]
 
     dropdown_list = Dropdown(options=dropdown_items, on_change=on_dropdown_change, width=400)
-    area_buttons = Column()
-    weather_text = Text(value="天気予報がここに表示されます", expand=True)
+    area_buttons = Column(scroll=ScrollMode.ALWAYS)
+    weather_text = Column(scroll=ScrollMode.ALWAYS)
 
     # スクロール可能なListViewにラップ
     scrollable_area = ListView(
-        controls=[area_buttons],
-        expand=True,
         height=400,
-        width=400
+        controls=[area_buttons],
+        expand=True
     )
 
-    db_text = Text(value="", expand=True)
-    db_display_button = ElevatedButton(text="データベース内容を表示", on_click=lambda e: display_database_contents())
+    scrollable_weather = ListView(
+        height=400,
+        controls=[weather_text],
+        expand=True
+    )
 
-    page.add(dropdown_list)
-    page.add(scrollable_area)
-    page.add(weather_text)
-    page.add(db_display_button)
-    page.add(db_text)
+    # UIのレイアウト
+    page.add(
+        Column(
+            [
+                Container(
+                    content=Text("天気予報アプリケーション", size=30, weight="bold"),
+                    alignment=ft.alignment.center
+                ),
+                Row(
+                    [Text("地域を選択してください:", size=20)],
+                    alignment=MainAxisAlignment.CENTER
+                ),
+                Row(
+                    [dropdown_list],
+                    alignment=MainAxisAlignment.CENTER
+                ),
+                Row(
+                    [
+                        Column(
+                            [
+                                Text("地域ごとの天気情報:", size=20),
+                                scrollable_area,
+                            ],
+                            width=400
+                        ),
+                        Container(width=20),  # 適切なスペースを確保するための空のコンテナ
+                        Column(
+                            [
+                                Text("天気予報:", size=20),
+                                scrollable_weather,
+                            ],
+                            width=400,
+                            height=400
+                        ),
+                    ],
+                    alignment=MainAxisAlignment.CENTER
+                ),
+            ],
+            expand=True,
+            alignment=MainAxisAlignment.START
+        )
+    )
+
     page.update()
 
     global loop
     if not loop.is_running():
         loop.run_forever()
 
-# アプリケーション実行
+# アプリケーションの起動
 ft.app(target=main)
